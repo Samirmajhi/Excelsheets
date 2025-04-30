@@ -1,4 +1,88 @@
 import pandas as pd
+
+# Load the sheets from the same Excel file
+excel_path = "your_file.xlsx"
+new_df = pd.read_excel(excel_path, sheet_name="Plan")
+old_df = pd.read_excel(excel_path, sheet_name="Plan Old")
+
+# Convert Recovery Plan columns to datetime
+new_df["Recovery Plan"] = pd.to_datetime(new_df["Recovery Plan"], errors="coerce")
+old_df["Recovery Plan"] = pd.to_datetime(old_df["Recovery Plan"], errors="coerce")
+
+# Create a dictionary for quick lookup from old_df
+old_dict = {
+    (row["Code"], row["DR Scenerio"]): row
+    for _, row in old_df.iterrows()
+}
+
+# Final output list
+merged_rows = []
+
+# Iterate over each row in new_df
+for _, new_row in new_df.iterrows():
+    code = new_row["Code"]
+    scenario = new_row["DR Scenerio"]
+    new_rp = new_row["Recovery Plan"]
+
+    key = (code, scenario)
+    old_row = old_dict.get(key)
+
+    if old_row is None:
+        # Case: App doesn't exist in old sheet → keep as-is
+        merged_rows.append(new_row)
+    else:
+        old_rp = old_row["Recovery Plan"]
+
+        # If both dates are NaT
+        if pd.isna(new_rp) and pd.isna(old_rp):
+            row = new_row.copy()
+            row["RTE"] = new_row["RTE"]
+            row["RPE"] = new_row["RPE"]
+            row["Recovery Plan"] = pd.NaT
+        elif pd.isna(new_rp) and not pd.isna(old_rp):
+            row = new_row.copy()
+            row["RTE"] = old_row["RTE"]
+            row["RPE"] = old_row["RPE"]
+            row["Recovery Plan"] = old_row["Recovery Plan"]
+        elif not pd.isna(new_rp) and pd.isna(old_rp):
+            row = new_row.copy()
+            # Keep new row's values already
+        else:
+            # Both have dates → pick the latest
+            row = new_row.copy()
+            if new_rp > old_rp:
+                pass  # keep new_row as-is
+            else:
+                row["RTE"] = old_row["RTE"]
+                row["RPE"] = old_row["RPE"]
+                row["Recovery Plan"] = old_row["Recovery Plan"]
+
+        merged_rows.append(row)
+
+# Now add rows from old_df that were not in new_df
+new_keys = set((row["Code"], row["DR Scenerio"]) for _, row in new_df.iterrows())
+for _, old_row in old_df.iterrows():
+    key = (old_row["Code"], old_row["DR Scenerio"])
+    if key not in new_keys:
+        merged_rows.append(old_row)
+
+# Convert the final list of rows to a DataFrame
+final_df = pd.DataFrame(merged_rows)
+
+# Save to Excel
+final_df.to_excel("merged_result.xlsx", index=False)
+
+
+
+
+
+
+
+
+
+
+
+import pandas as pd
 import random
 
 # Define some sample data
