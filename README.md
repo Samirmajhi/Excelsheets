@@ -1,5 +1,88 @@
 import pandas as pd
 
+# Load Excel file and sheets
+file_path = 'your_file.xlsx'
+xls = pd.ExcelFile(file_path)
+
+new_df = xls.parse('NewSheet')    # Replace with your actual sheet name
+old_df = xls.parse('OldSheet')    # Replace with your actual sheet name
+
+# Clean and normalize key columns
+new_df['Code'] = new_df['Code'].astype(str).str.strip()
+new_df['DR Scenerio'] = new_df['DR Scenerio'].astype(str).str.strip()
+old_df['Code'] = old_df['Code'].astype(str).str.strip()
+old_df['DR Scenerio'] = old_df['DR Scenerio'].astype(str).str.strip()
+
+# Convert date columns
+new_df['Recovery Plan'] = pd.to_datetime(new_df['Recovery Plan'], errors='coerce')
+old_df['Recovery Plan'] = pd.to_datetime(old_df['Recovery Plan'], errors='coerce')
+
+# New list to hold merged rows and set to track matched keys
+merged_rows = []
+matched_keys = set()
+
+# Loop through new_df rows
+for _, new_row in new_df.iterrows():
+    code = new_row['Code']
+    scenario = new_row['DR Scenerio']
+    key = (code, scenario)
+
+    match = old_df[(old_df['Code'] == code) & (old_df['DR Scenerio'] == scenario)]
+
+    if not match.empty:
+        old_row = match.iloc[0]
+
+        new_date = new_row['Recovery Plan']
+        old_date = old_row['Recovery Plan']
+
+        if pd.isna(new_date) and pd.isna(old_date):
+            merged_rte = new_row['RTE']
+            merged_rpe = new_row['RPE']
+            merged_date = pd.NaT
+        elif pd.isna(new_date):
+            merged_rte = old_row['RTE']
+            merged_rpe = old_row['RPE']
+            merged_date = old_date
+        elif pd.isna(old_date):
+            merged_rte = new_row['RTE']
+            merged_rpe = new_row['RPE']
+            merged_date = new_date
+        else:
+            if new_date > old_date:
+                merged_rte = new_row['RTE']
+                merged_rpe = new_row['RPE']
+                merged_date = new_date
+            else:
+                merged_rte = old_row['RTE']
+                merged_rpe = old_row['RPE']
+                merged_date = old_date
+
+        new_row['RTE'] = merged_rte
+        new_row['RPE'] = merged_rpe
+        new_row['Recovery Plan'] = merged_date
+
+        matched_keys.add(key)
+        merged_rows.append(new_row)
+    else:
+        # No match found — just add the row from new_df
+        merged_rows.append(new_row)
+        matched_keys.add(key)
+
+# Add unmatched rows from old_df directly (no comparison)
+for _, old_row in old_df.iterrows():
+    key = (old_row['Code'], old_row['DR Scenerio'])
+    if key not in matched_keys:
+        merged_rows.append(old_row)
+
+# Final merged DataFrame
+final_df = pd.DataFrame(merged_rows)
+
+
+
+
+
+import pandas as pd
+
 # Load Excel file and specific sheets
 file_path = 'your_excel_file.xlsx'
 new_df = pd.read_excel(file_path, sheet_name='Plan')
