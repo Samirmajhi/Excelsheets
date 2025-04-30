@@ -1,5 +1,76 @@
 import pandas as pd
 
+# Load Excel file and specific sheets
+file_path = 'your_excel_file.xlsx'
+new_df = pd.read_excel(file_path, sheet_name='Plan')
+old_df = pd.read_excel(file_path, sheet_name='Plan Old')
+
+# Ensure Recovery Plan is datetime
+new_df['Recovery Plan'] = pd.to_datetime(new_df['Recovery Plan'], errors='coerce')
+old_df['Recovery Plan'] = pd.to_datetime(old_df['Recovery Plan'], errors='coerce')
+
+# Fill NaN in RTE and RPE for safety
+for col in ['RTE', 'RPE']:
+    new_df[col] = new_df[col].fillna('')
+    old_df[col] = old_df[col].fillna('')
+
+# Merge logic
+merged_rows = []
+matched_keys = set()
+
+for _, new_row in new_df.iterrows():
+    code = new_row['Code']
+    dr = new_row['DR Scenerio']
+    key = (code, dr)
+
+    old_match = old_df[(old_df['Code'] == code) & (old_df['DR Scenerio'] == dr)]
+
+    if not old_match.empty:
+        old_row = old_match.iloc[0]
+
+        # Compare Recovery Plan
+        new_date = new_row['Recovery Plan']
+        old_date = old_row['Recovery Plan']
+
+        # Decision logic
+        if pd.isna(new_date) and pd.isna(old_date):
+            final_row = new_row
+        elif pd.isna(new_date):
+            final_row = old_row.copy()
+        elif pd.isna(old_date):
+            final_row = new_row
+        else:
+            final_row = new_row if new_date > old_date else old_row
+
+        matched_keys.add(key)
+        merged_rows.append(final_row)
+    else:
+        # No match found, keep new row
+        merged_rows.append(new_row)
+        matched_keys.add(key)
+
+# Add unmatched old_df rows
+for _, old_row in old_df.iterrows():
+    key = (old_row['Code'], old_row['DR Scenerio'])
+    if key not in matched_keys:
+        merged_rows.append(old_row)
+
+# Final DataFrame
+merged_df = pd.DataFrame(merged_rows)
+
+# Save result
+merged_df.to_excel('merged_output.xlsx', index=False)
+
+
+
+
+
+
+
+
+
+import pandas as pd
+
 # Load Excel file and sheets
 file_path = 'your_file.xlsx'
 xls = pd.ExcelFile(file_path)
